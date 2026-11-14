@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Drift",
+  "version": "0.1.0",
+  "identifier": "app.drift.wallpaper",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1460",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "Drift",
+      "width": 1120,
+      "height": 780,
+      "minWidth": 820,
+      "minHeight": 620,
+      "center": true,
+      "hiddenTitle": true,
+      "titleBarStyle": "Overlay",
+      "trafficLightPosition": { "x": 16, "y": 18 }
+    }],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost blob: data:; media-src 'self' asset: https://asset.localhost blob: data:; connect-src 'self' ipc: http://ipc.localhost;",
+      "assetProtocol": { "enable": true, "scope": ["**"] }
+    },
+    "macOSPrivateApi": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns"],
+    "macOS": { "minimumSystemVersion": "12.0", "signingIdentity": "-" }
+  }
+}
