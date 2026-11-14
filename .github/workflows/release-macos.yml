@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build-universal-macos:
     name: Build universal macOS release
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - name: Check out Drift
         uses: actions/checkout@v4
