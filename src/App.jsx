@@ -111,8 +111,12 @@ export default function App() {
   const toggleProtection = async () => { const enabled = await invoke('set_click_protection', { enabled: !desktopProtection }); setDesktopProtection(Boolean(enabled)); setNotice(enabled ? 'Desktop protected. Wallpaper clicks will keep your windows in place.' : 'Standard macOS desktop reveal restored.'); };
   const previewScene = sceneFor(settings, settings.monitorIndex);
   const previewUrl = previewScene.path ? convertFileSrc(previewScene.path) : '';
+  const beginWindowDrag = (event) => {
+    if (event.button !== 0 || event.target.closest('button, select, input, textarea, a, [data-no-window-drag]')) return;
+    getCurrentWindow().startDragging().catch(() => {});
+  };
 
-  return <main className="drift-app"><div className="drift-app__glow" />
+  return <main className="drift-app" onPointerDown={beginWindowDrag}><div className="drift-app__glow" />
     <header className="drift-header" data-tauri-drag-region><div className="drift-brand" data-tauri-drag-region><span>≈</span><div><strong>Drift</strong><small>MOTION WALLPAPER</small></div></div><div className={`drift-live ${running ? 'is-live' : ''}`}><i />{running ? 'RUNNING' : 'READY'}</div></header>
     <section className="drift-layout">
       <div className="drift-preview-card"><div className="drift-section-title"><span>DESKTOP PREVIEW</span><strong>{settings.displayMode === 'all' ? 'All displays' : monitorTitle(monitors[settings.monitorIndex], settings.monitorIndex)}</strong></div><div className="drift-preview">{previewUrl ? <video src={previewUrl} autoPlay muted loop playsInline style={{ objectFit: previewScene.fit || settings.fit }} /> : <button onClick={chooseVideo}><b>＋</b><strong>Choose a scene</strong><small>MP4, MOV, M4V or WebM</small></button>}<div className="drift-preview__shade" /><div className="drift-preview__dock"><i/><i/><i/><i/><i/></div></div><p>{notice}</p></div>
