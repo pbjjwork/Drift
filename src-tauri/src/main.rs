@@ -73,7 +73,7 @@ fn main() {
             let icon = app.default_window_icon().cloned().ok_or("Drift icon could not be loaded")?;
             TrayIconBuilder::with_id("drift")
                 .icon(icon)
-                .icon_as_template(true)
+                .icon_as_template(false)
                 .tooltip("Drift")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
