@@ -691,12 +691,15 @@ dependencies = [
 name = "drift-wallpaper"
 version = "0.1.0"
 dependencies = [
+ "objc2",
+ "objc2-app-kit",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
  "tauri-plugin-dialog",
+ "tokio",
 ]
 
 [[package]]

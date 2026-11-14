@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Drift desktop permissions",
-  "windows": ["main", "wallpaper"],
+  "windows": ["main", "wallpaper", "wallpaper-*"],
   "permissions": [
     "core:default",
     "core:event:allow-listen",

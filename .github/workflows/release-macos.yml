@@ -1,0 +1,71 @@
+name: Release Drift for macOS
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish (for example v0.1.0)
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: write
+
+concurrency:
+  group: drift-release-${{ github.ref_name }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-universal-macos:
+    name: Build universal macOS release
+    runs-on: macos-14
+    steps:
+      - name: Check out Drift
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up universal Rust targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build universal Drift app and DMG
+        run: npm run tauri:build -- --target universal-apple-darwin
+
+      - name: Prepare release files
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          OUTPUT="$RUNNER_TEMP/drift-release"
+          mkdir -p "$OUTPUT"
+          APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/Drift.app"
+          DMG=$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUTPUT/Drift-$VERSION-universal-macos.zip"
+          cp "$DMG" "$OUTPUT/Drift-$VERSION-universal-macos.dmg"
+          shasum -a 256 "$OUTPUT"/* > "$OUTPUT/SHA256SUMS.txt"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: Drift ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            ${{ runner.temp }}/drift-release/Drift-*-universal-macos.dmg
+            ${{ runner.temp }}/drift-release/Drift-*-universal-macos.zip
+            ${{ runner.temp }}/drift-release/SHA256SUMS.txt
+          fail_on_unmatched_files: true

@@ -39,11 +39,57 @@ fn set_click_protection(enabled: bool) -> Result<bool, String> {
     Err("This setting is available on macOS only".into())
 }
 
-fn show_main(app: &tauri::AppHandle) {
+#[tauri::command]
+async fn get_monitors(app: tauri::AppHandle) -> Vec<serde_json::Value> {
+    #[cfg(target_os = "macos")]
+    let native_names: Vec<String> = {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let scheduled = app.run_on_main_thread(move || {
+            let names = objc2::MainThreadMarker::new()
+                .map(|marker| objc2_app_kit::NSScreen::screens(marker).iter().map(|screen| screen.localizedName().to_string()).collect())
+                .unwrap_or_default();
+            let _ = sender.send(names);
+        });
+        if scheduled.is_ok() { receiver.await.unwrap_or_default() } else { Vec::new() }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let native_names: Vec<String> = Vec::new();
+
+    let Some(window) = app.get_webview_window("main") else { return Vec::new(); };
+    let Ok(monitors) = window.available_monitors() else { return Vec::new(); };
+    let primary_index = monitors.iter().enumerate().min_by_key(|(_, monitor)| {
+        let position = monitor.position();
+        (position.x.abs() as i64) + (position.y.abs() as i64)
+    }).map(|(index, _)| index).unwrap_or(0);
+
+    monitors.iter().enumerate().map(|(index, monitor)| {
+        let size = monitor.size();
+        let position = monitor.position();
+        let scale = monitor.scale_factor();
+        let hardware_name = native_names.get(index).cloned().or_else(|| monitor.name().cloned().filter(|name| !name.trim().is_empty()));
+        let name = hardware_name.clone().unwrap_or_else(|| if index == primary_index { "Built-in / Primary Display".into() } else { format!("External Display {}", index + 1) });
+        serde_json::json!({
+            "name": name,
+            "deviceName": hardware_name,
+            "isPrimary": index == primary_index,
+            "index": index,
+            "size": { "width": (size.width as f64 / scale).round() as u32, "height": (size.height as f64 / scale).round() as u32 },
+            "position": { "x": (position.x as f64 / scale).round() as i32, "y": (position.y as f64 / scale).round() as i32 },
+            "scaleFactor": scale,
+            "dimensionsAreLogical": true
+        })
+    }).collect()
+}
+
+fn toggle_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
     }
 }
 
@@ -64,7 +110,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(autostart.args(["--autostart"]).build())
-        .invoke_handler(tauri::generate_handler![is_autostart_launch, get_click_protection, set_click_protection])
+        .invoke_handler(tauri::generate_handler![is_autostart_launch, get_click_protection, set_click_protection, get_monitors])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -76,18 +122,16 @@ fn main() {
             }
 
             let instance_listener = single_instance_listener.try_clone()?;
-            let instance_app = app.handle().clone();
             std::thread::spawn(move || {
                 for connection in instance_listener.incoming() {
                     if let Ok(mut stream) = connection {
                         let mut message = [0_u8; 8];
                         let _ = stream.read(&mut message);
-                        show_main(&instance_app);
                     }
                 }
             });
 
-            let open = MenuItemBuilder::new("Open Drift").id("open").build(app)?;
+            let open = MenuItemBuilder::new("Show / Hide Drift").id("open").build(app)?;
             let toggle = MenuItemBuilder::new("Pause / Resume Motion").id("toggle").build(app)?;
             let stop = MenuItemBuilder::new("Stop Wallpaper").id("stop").build(app)?;
             let quit = MenuItemBuilder::new("Quit Drift").id("quit").build(app)?;
@@ -101,11 +145,11 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                        show_main(tray.app_handle());
+                        toggle_main(tray.app_handle());
                     }
                 })
                 .on_menu_event(|app, event| match event.id().as_ref() {
-                    "open" => show_main(app),
+                    "open" => toggle_main(app),
                     "toggle" => { let _ = app.emit("drift://toggle", ()); },
                     "stop" => { let _ = app.emit("drift://stop", ()); },
                     "quit" => app.exit(0),

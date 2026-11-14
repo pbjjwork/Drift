@@ -13,6 +13,7 @@ function readSettings() {
 export default function WallpaperSurface() {
   const [settings, setSettings] = React.useState(readSettings);
   const videoRef = React.useRef(null);
+  const surfaceMonitorIndex = Number(new URLSearchParams(window.location.hash.split('?')[1] || '').get('display') || 0);
 
   React.useEffect(() => {
     const current = getCurrentWindow();
@@ -36,24 +37,28 @@ export default function WallpaperSurface() {
     return () => { disposeSettings?.(); disposePlayback?.(); };
   }, []);
 
+  const scene = settings.displayMode === 'individual'
+    ? { ...settings, ...(settings.displayScenes?.[settings.surfaceMonitorIndex ?? surfaceMonitorIndex] || {}) }
+    : settings;
+
   React.useEffect(() => {
     if (!videoRef.current) return;
-    videoRef.current.muted = settings.muted !== false;
-    videoRef.current.loop = settings.loop !== false;
-    if (settings.playing === false) videoRef.current.pause();
+    videoRef.current.muted = scene.muted !== false;
+    videoRef.current.loop = scene.loop !== false;
+    if (scene.playing === false) videoRef.current.pause();
     else videoRef.current.play().catch(() => {});
-  }, [settings]);
+  }, [scene]);
 
   return <main className="drift-surface">
-    {settings.path && <video
+    {scene.path && <video
       ref={videoRef}
-      key={settings.path}
-      src={convertFileSrc(settings.path)}
+      key={scene.path}
+      src={convertFileSrc(scene.path)}
       autoPlay
-      muted={settings.muted !== false}
-      loop={settings.loop !== false}
+      muted={scene.muted !== false}
+      loop={scene.loop !== false}
       playsInline
-      style={{ objectFit: settings.fit || 'cover' }}
+      style={{ objectFit: scene.fit || settings.fit || 'cover' }}
     />}
   </main>;
 }
