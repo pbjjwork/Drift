@@ -8,7 +8,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 const STORAGE_KEY = 'drift.settings.v1';
 const SURFACE_LABEL = 'wallpaper';
-const DEFAULTS = { path: '', name: '', fit: 'cover', muted: true, loop: true, playing: true, monitorIndex: 0, resumeOnLaunch: true };
+const DEFAULTS = { path: '', name: '', fit: 'cover', muted: true, loop: true, playing: true, monitorIndex: 0 };
 
 function readSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
@@ -19,6 +19,7 @@ function nameFromPath(path = '') { return path.split(/[\\/]/).pop() || ''; }
 export default function App() {
   const [settings, setSettings] = React.useState(readSettings);
   const settingsRef = React.useRef(settings);
+  const launchHandledRef = React.useRef(false);
   const [monitors, setMonitors] = React.useState([]);
   const [running, setRunning] = React.useState(false);
   const [launchAtLogin, setLaunchAtLogin] = React.useState(false);
@@ -120,11 +121,13 @@ export default function App() {
       listen('drift://stop', stopWallpaper),
     ]).then((values) => { disposers = values; });
 
-    invoke('is_autostart_launch').then(async (autostart) => {
-      if (!autostart) return;
-      if (settingsRef.current.resumeOnLaunch && settingsRef.current.path) await startWallpaper();
-      await getCurrentWindow().hide();
-    }).catch(() => {});
+    if (!launchHandledRef.current) {
+      launchHandledRef.current = true;
+      invoke('is_autostart_launch').then(async (autostart) => {
+        if (settingsRef.current.path) await startWallpaper();
+        if (autostart) await getCurrentWindow().hide();
+      }).catch(() => {});
+    }
     return () => { disposed = true; disposers.forEach((dispose) => dispose()); };
   }, [startWallpaper, stopWallpaper]);
 
@@ -175,7 +178,6 @@ export default function App() {
         <Toggle title="Loop continuously" subtitle="Restart when the video ends" enabled={settings.loop} onClick={() => update({ loop: !settings.loop })} />
         <Toggle title="Mute wallpaper" subtitle="Keep your desktop quiet" enabled={settings.muted} onClick={() => update({ muted: !settings.muted })} />
         <Toggle title="Open at login" subtitle="Start Drift when you sign in" enabled={launchAtLogin} onClick={toggleAutostart} />
-        <Toggle title="Resume scene on launch" subtitle="Restore this wallpaper automatically" enabled={settings.resumeOnLaunch} onClick={() => update({ resumeOnLaunch: !settings.resumeOnLaunch })} />
         <Toggle title="Keep windows in place" subtitle="Disable click-to-reveal desktop" enabled={desktopProtection} onClick={toggleProtection} />
         <div className="drift-actions"><button className="drift-primary" onClick={running ? () => update({ playing: !settings.playing }) : () => startWallpaper()}>{running ? (settings.playing ? 'Pause motion' : 'Resume motion') : 'Start Drift'}</button>{running && <button className="drift-stop" onClick={stopWallpaper}>Stop</button>}</div>
       </aside>

@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use tauri::{Emitter, Manager};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -47,6 +48,15 @@ fn show_main(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    let single_instance_listener = match std::net::TcpListener::bind("127.0.0.1:49682") {
+        Ok(listener) => listener,
+        Err(_) => {
+            if let Ok(mut stream) = std::net::TcpStream::connect("127.0.0.1:49682") {
+                let _ = stream.write_all(b"open");
+            }
+            return;
+        }
+    };
     let autostart = tauri_plugin_autostart::Builder::new();
     #[cfg(target_os = "macos")]
     let autostart = autostart.macos_launcher(MacosLauncher::LaunchAgent);
@@ -55,7 +65,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(autostart.args(["--autostart"]).build())
         .invoke_handler(tauri::generate_handler![is_autostart_launch, get_click_protection, set_click_protection])
-        .setup(|app| {
+        .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -64,6 +74,18 @@ fn main() {
                     let _ = window.hide();
                 }
             }
+
+            let instance_listener = single_instance_listener.try_clone()?;
+            let instance_app = app.handle().clone();
+            std::thread::spawn(move || {
+                for connection in instance_listener.incoming() {
+                    if let Ok(mut stream) = connection {
+                        let mut message = [0_u8; 8];
+                        let _ = stream.read(&mut message);
+                        show_main(&instance_app);
+                    }
+                }
+            });
 
             let open = MenuItemBuilder::new("Open Drift").id("open").build(app)?;
             let toggle = MenuItemBuilder::new("Pause / Resume Motion").id("toggle").build(app)?;
