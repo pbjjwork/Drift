@@ -70,10 +70,10 @@ fn main() {
             let stop = MenuItemBuilder::new("Stop Wallpaper").id("stop").build(app)?;
             let quit = MenuItemBuilder::new("Quit Drift").id("quit").build(app)?;
             let menu = MenuBuilder::new(app).item(&open).separator().item(&toggle).item(&stop).separator().item(&quit).build()?;
-            let icon = app.default_window_icon().cloned().ok_or("Drift icon could not be loaded")?;
+            let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
             TrayIconBuilder::with_id("drift")
                 .icon(icon)
-                .icon_as_template(false)
+                .icon_as_template(true)
                 .tooltip("Drift")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
